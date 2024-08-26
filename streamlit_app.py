@@ -65,9 +65,9 @@ if os.path.exists(faiss_index_file) and os.path.exists(chunks_file):
         
         # Generate the formatted prompt
         formatted_prompt = get_prompt_template(context, question)
-        
+        api_key = "Enter your own API KEY"
         # Get the response from the Gemini model
-        genai.configure(api_key="AIzaSyAOihUzRE33IBpytLp3TgfSVpeJj9pPWh8")
+        genai.configure(api_key=api_key)
 
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(formatted_prompt)
