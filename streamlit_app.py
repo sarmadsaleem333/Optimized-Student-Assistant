@@ -4,9 +4,9 @@ from langchain import PromptTemplate
 import google.generativeai as genai
 import faiss
 import os
-import pickle5 as pickle
+import pickle as pickle
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
-from langchain.embeddings import HuggingFaceEmbeddings
 
 # Function definitions
 def load_faiss_index(faiss_index_file, chunks_file):
@@ -25,7 +25,7 @@ def embed_question(question):
 
 def get_context (question, faiss_index, chunks):
     query_embedding = embed_question(question)
-    distances, indices = search_faiss_index(faiss_index, query_embedding, k=5)
+    _, indices = search_faiss_index(faiss_index, query_embedding, k=5)
     similar_chunks = get_similar_chunks(indices, chunks)
     context = "\n\n".join([c.page_content for c in similar_chunks])
     return context
@@ -37,9 +37,14 @@ def get_prompt_template(context, question):
     )
     formatted_prompt = prompt_template.template.format(context=context, question=question)
     return formatted_prompt
+def search_faiss_index(index, query_embedding, k=5):
+    query_embedding_array = np.array([query_embedding], dtype='float32')
+    distances, indices = index.search(query_embedding_array, k)
+    return distances, indices
 
-# Configure Generative AI API
-genai.configure(api_key="AIzaSyAOihUzRE33IBpytLp3TgfSVpeJj9pPWh8")
+# Retrieve the most similar chunks
+def get_similar_chunks(indices, chunks):
+    return [chunks[i] for i in indices[0]]
 
 # Initialize Streamlit app
 st.title("PDF Question Answering System")
@@ -62,9 +67,10 @@ if os.path.exists(faiss_index_file) and os.path.exists(chunks_file):
         formatted_prompt = get_prompt_template(context, question)
         
         # Get the response from the Gemini model
+        genai.configure(api_key="AIzaSyAOihUzRE33IBpytLp3TgfSVpeJj9pPWh8")
+
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(formatted_prompt)
-        
         # Display the response
         st.write("### Response:")
         st.write(response.text)
