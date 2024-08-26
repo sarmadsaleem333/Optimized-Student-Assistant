@@ -1,2 +1,8 @@
 streamlit
 openai
+langchain
+google.generativeai 
+ langchain-community
+ faiss
+ sentence-transformers
+ pickle5

@@ -1,40 +1,72 @@
 import streamlit as st
+import numpy as np
+from langchain import PromptTemplate
 import google.generativeai as genai
-from langchain import PromptTemplate, LLMChain
-from functions import DocumentQA
-from langchain_community.document_loaders import PyPDFLoader
+import faiss
 import os
-# Show title and description.
-st.title("📄 Document Question Answering with Gemini")
-st.write(
-    "Upload a document below and ask a question about it. Our model will answer it."
-)
+import pickle5 as pickle
 
-# Input field for API Key
-api_key = st.text_input("API Key", type="password")
-if not api_key:
-    st.info("Please add your API key to continue.", icon="🗝️")
-else:
-    # Configure the Gemini API client with the provided API key
-    genai.configure(api_key=api_key)
+from langchain.embeddings import HuggingFaceEmbeddings
 
-    # File uploader for the user to upload a document (PDF)
-    uploaded_file = st.file_uploader("Upload a document (.pdf)", type=("pdf"))
+# Function definitions
+def load_faiss_index(faiss_index_file, chunks_file):
+    # Load FAISS index from file
+    faiss_index = faiss.read_index(faiss_index_file)
     
-    # Text area for the user to input a question about the document
-    question = st.text_area(
-        "Now ask a question about the document!",
-        placeholder="Can you give me a short summary?",
-        disabled=not uploaded_file,
+    # Load the chunks from a pickle file
+    with open(chunks_file, "rb") as f:
+        chunks = pickle.load(f)
+    
+    return faiss_index, chunks
+
+def embed_question(question):
+    embeddings = HuggingFaceEmbeddings()
+    return embeddings.embed_query(question)
+
+def get_context (question, faiss_index, chunks):
+    query_embedding = embed_question(question)
+    distances, indices = search_faiss_index(faiss_index, query_embedding, k=5)
+    similar_chunks = get_similar_chunks(indices, chunks)
+    context = "\n\n".join([c.page_content for c in similar_chunks])
+    return context
+
+def get_prompt_template(context, question):
+    prompt_template = PromptTemplate(
+        input_variables=["context", "question"],
+        template="Given the following context YOU ARE STRICTLY REQUIRED TO ANSWER WITHIN THE DOMAIN OF THE CONTEXT:\n\n{context}\n\nAnswer the question:\n\n{question}\n\n"
     )
+    formatted_prompt = prompt_template.template.format(context=context, question=question)
+    return formatted_prompt
 
-    # If both a file is uploaded and a question is asked
-    if uploaded_file and question:
+# Configure Generative AI API
+genai.configure(api_key="AIzaSyAOihUzRE33IBpytLp3TgfSVpeJj9pPWh8")
+
+# Initialize Streamlit app
+st.title("PDF Question Answering System")
+
+# Paths to the FAISS index and chunk files
+faiss_index_file = "faiss_index_file.index" 
+chunks_file = "chunks_file.pkl"  
+
+if os.path.exists(faiss_index_file) and os.path.exists(chunks_file):
+    faiss_index, chunks = load_faiss_index(faiss_index_file, chunks_file)
+    
+    # User input for the question
+    question = st.text_input("Ask a question related to the indexed PDF content")
+
+    if question:
+        # Get context from the FAISS index
+        context = get_context(question, faiss_index, chunks)
         
+        # Generate the formatted prompt
+        formatted_prompt = get_prompt_template(context, question)
+        
+        # Get the response from the Gemini model
         model = genai.GenerativeModel('gemini-1.5-flash')
-        # Generate a response using the Gemini model
-        response = model.generate_content(question)
-
-        # Display the response in the Streamlit app
-        st.write("### Answer:")
+        response = model.generate_content(formatted_prompt)
+        
+        # Display the response
+        st.write("### Response:")
         st.write(response.text)
+else:
+    st.error("FAISS index file or chunks file not found. Please ensure 'faiss_index.index' and 'chunks.pkl' are in the same directory.")
