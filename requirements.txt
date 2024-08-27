@@ -3,6 +3,6 @@ openai
 langchain
 google.generativeai 
 langchain-community
-faiss
+faiss-cpu
 sentence-transformers
 pickle
