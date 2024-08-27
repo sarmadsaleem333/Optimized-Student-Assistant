@@ -4,7 +4,7 @@ from langchain import PromptTemplate
 import google.generativeai as genai
 import faiss
 import os
-import pickle as pickle
+import pickle5 as pickle
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
 
